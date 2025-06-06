@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <title>Joel</title>
@@ -26,27 +27,64 @@
 
 <body>
   <div id="captcha-container">
-    <!-- Add your CAPTCHA here: -->
-    Hello world!
 
-    <!-- We've added a sample button. Feel free to remove it: -->
-    <button id="solve">
-      Solve!
-    </button>
   </div>
 
   <script type="text/javascript">
-    (function(window, document){
+    (function (window, document) {
       // This is how you tell the parent window that the CAPTCHA was successful.
       function captchaSuccess() {
         window.top.postMessage("success", '*');
       }
 
       // Your CAPTCHA code goes here, we've added a simple example below:
-      document.getElementById('solve')
-           .addEventListener('click', () => captchaSuccess());
+      //document.getElementById('solve').addEventListener('click', () => captchaSuccess());
 
     })(window, document);
+
+    const container = document.getElementById('captcha-container');
+    const canvas = document.createElement('canvas');
+    canvas.width = 390;
+    canvas.height = 300;
+    canvas.id = 'captcha-canvas';
+    container.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
+    const GRAVITY = 0.25; // Adjusted for JS frame rate
+    const BOUNCE_FACTOR = 0.7;
+    const BALL_RADIUS = 10;
+    const PEG_RADIUS = 12;
+    const LAUNCHER_POS = { x: WIDTH / 2, y: 50 };
+    const LAUNCH_SPEED = 10; // Initial speed of the ball
+
+    let launcherAngle = Math.PI / 2; // Pointing straight down initially
+
+
+    function drawLauncher(ctx, angle) {
+      const len = 50;
+      const endX = LAUNCHER_POS.x + len * Math.cos(angle);
+      const endY = LAUNCHER_POS.y + len * Math.sin(angle);
+
+      ctx.beginPath();
+      ctx.moveTo(LAUNCHER_POS.x, LAUNCHER_POS.y);
+      ctx.lineTo(endX, endY);
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 5;
+      ctx.stroke();
+      ctx.closePath();
+
+      // Draw base circle for launcher
+      ctx.beginPath();
+      ctx.arc(LAUNCHER_POS.x, LAUNCHER_POS.y, 15, 0, Math.PI * 2);
+      ctx.fillStyle = 'grey';
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    drawLauncher(ctx, launcherAngle);
   </script>
 </body>
+
 </html>

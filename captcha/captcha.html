@@ -32,6 +32,7 @@
   </div>
 
   <script type="text/javascript">
+
     (function (window, document) {
       // This is how you tell the parent window that the CAPTCHA was successful.
       function captchaSuccess() {
@@ -45,7 +46,7 @@
 
       //Difficulty Settings
       let orangePegs = 5
-      let orangeSize = 10
+      let orangeSize = 20
       let bluePegs = 5
       let blueSize = 10
       let mustCatch = true // Captcha will reset if you don't catch the ball
@@ -61,7 +62,7 @@
 
       const WIDTH = canvas.width;
       const HEIGHT = canvas.height;
-      const GRAVITY = 0.25;
+      const GRAVITY = 0.1;
       const BOUNCE_FACTOR = 0.7;
       const BALL_RADIUS = 10;
       const PEG_RADIUS = 12;
@@ -70,7 +71,7 @@
 
       let pegs = [];
       let activeBall = null;
-      let orangePegsRemaining = 0;
+      let orangePegsRemaining = orangePegs;
       let launcherAngle = Math.PI / 2; // Pointing straight down initially
       let canShoot = true
 
@@ -189,28 +190,20 @@
       }
 
       class Peg {
-        constructor(x, y, type = "blue") {
+        constructor(x, y, color, size) { // Add size parameter
           this.x = x;
           this.y = y;
-          this.radius = PEG_RADIUS;
-          this.type = type;
+          this.radius = size / 2; // Use size for radius
+          this.size = size; // Store size for collision checking
           this.active = true;
-          this.hitThisTurn = false; // Prevent multi-hits from one ball pass
-
-          if (type === "orange") {
-            this.color = 'orange';
-            orangePegsRemaining++;
-          } else {
-            this.color = 'blue';
-          }
+          this.color = color;
         }
 
         hit() {
           // Only register hit if peg is active and not hit this turn yet
-          if (this.active && !this.hitThisTurn) {
+          if (this.active) {
             this.active = false;
-            this.hitThisTurn = true; // Mark as hit for this turn
-            if (this.type === "orange") {
+            if (this.color === "orange") {
               orangePegsRemaining--;
             }
           }
@@ -232,37 +225,52 @@
 
       // --- Functions ---
       function setupLevel() {
-        pegs = [];
-        orangePegsRemaining = 0;
 
-        // Simple grid layout for demonstration
-        const rows = 3;
-        const cols = 18;
-        const startX = 0;
-        const startY = 100;
-        const spacingX = 40;
-        const spacingY = 35;
+        // Helper function to check collisions
+        const checkCollision = (newPeg) => {
+          return pegs.some(existingPeg => {
+            const dx = newPeg.x - existingPeg.x;
+            const dy = newPeg.y - existingPeg.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < (newPeg.radius / 2 + existingPeg.radius / 2);
+          });
+        };
 
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            // Stagger alternate rows
-            const x = startX + c * spacingX + (r % 2) * (spacingX / 2);
-            const y = startY + r * spacingY;
+        // Create pegs with collision checking
+        const createPegs = (count, size, color) => {
+          for (let i = 0; i < count; i++) {
+            let attempts = 0;
+            let validPosition = false;
+            let margin = 30
+            while (!validPosition && attempts < 5000) {
+              const minPos = margin + size / 2;
+              const maxPos = WIDTH - margin - size / 2;
 
-            // Basic check to avoid edges (optional)
-            if (x < PEG_RADIUS || x > WIDTH - PEG_RADIUS) continue;
+              const x = Math.random() * (maxPos - minPos) + minPos;
+              const y = Math.random() * (HEIGHT - margin * 2 - size) + margin + size / 2;
 
-            let type = "blue";
-            type = "orange";
+              const newPeg = new Peg(x, y, color, size);
 
-            // Add peg if not too dense (e.g., only add 70% of potential blue pegs)
-            if (type === "orange" || Math.random() < 0.7) {
-              pegs.push(new Peg(x, y, type));
+              if (!checkCollision(newPeg)) {
+                pegs.push(newPeg);
+                validPosition = true;
+              }
+              attempts++;
+            }
+
+            if (!validPosition) {
+              console.warn(`Could not place ${color} peg after 5000 attempts`);
             }
           }
-        }
+        };
 
+        // Create pegs
+        createPegs(orangePegs, orangeSize, 'orange');
+        createPegs(bluePegs, blueSize, 'blue');
+
+        return pegs;
       }
+
       canvas.addEventListener('mousemove', (event) => {
         const rect = canvas.getBoundingClientRect();
         const mouseX = event.clientX - rect.left;

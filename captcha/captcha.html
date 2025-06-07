@@ -42,8 +42,6 @@
       // Your CAPTCHA code goes here, we've added a simple example below:
       //document.getElementById('solve').addEventListener('click', () => captchaSuccess());
 
-
-
       //Difficulty Settings
       let orangePegs = 5
       let orangeSize = 20
@@ -81,6 +79,13 @@
       btc.style.height = '40px';
       btc.style.position = 'fixed';
       document.body.appendChild(btc);
+
+      const bucket = document.createElement('img');
+      bucket.src = 'bucket.png';
+      bucket.style.width = '200px';
+      bucket.style.height = '40px';
+      bucket.style.position = 'fixed';
+      document.body.appendChild(bucket);
 
       function drawLauncher(ctx, angle) {
         const len = 50;
@@ -271,9 +276,10 @@
         return pegs;
       }
 
+      let mouseX = 0
       canvas.addEventListener('mousemove', (event) => {
         const rect = canvas.getBoundingClientRect();
-        const mouseX = event.clientX - rect.left;
+        mouseX = event.clientX - rect.left;
         const mouseY = event.clientY - rect.top;
         launcherAngle = Math.atan2(mouseY - LAUNCHER_POS.y, mouseX - LAUNCHER_POS.x);
       });
@@ -321,6 +327,10 @@
           btc.style.left = `${canvasRect.left - 24 + (WIDTH / 2)}px`;
           btc.style.top = `${canvasRect.top - 24}px`;
         }
+        bucket.style.left = `${mouseX - 100}px`;
+        bucket.style.top = `${canvasRect.top + 275}px`;
+
+
         requestAnimationFrame(gameLoop);// Request Next Frame
       }
       // --- Start Game ---

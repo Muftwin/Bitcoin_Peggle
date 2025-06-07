@@ -74,6 +74,13 @@
       let launcherAngle = Math.PI / 2; // Pointing straight down initially
       let canShoot = true
 
+      const btc = document.createElement('img');
+      btc.src = 'btc.gif';
+      btc.style.width = '40px';
+      btc.style.height = '40px';
+      btc.style.position = 'fixed';
+      document.body.appendChild(btc);
+
       function drawLauncher(ctx, angle) {
         const len = 50;
         const endX = LAUNCHER_POS.x + len * Math.cos(angle);
@@ -82,7 +89,7 @@
         ctx.beginPath();
         ctx.moveTo(LAUNCHER_POS.x, LAUNCHER_POS.y);
         ctx.lineTo(endX, endY);
-        ctx.strokeStyle = 'white';
+        ctx.strokeStyle = 'grey';
         ctx.lineWidth = 5;
         ctx.stroke();
         ctx.closePath();
@@ -162,14 +169,11 @@
               }
             }
           });
-
-
           // Check if ball is off screen (bottom)
           if (this.y - this.radius > HEIGHT) {
             this.active = false;
             return false; // Indicate ball is gone
           }
-
           return true; // Indicate ball is still active
         }
 
@@ -209,7 +213,6 @@
             if (this.type === "orange") {
               orangePegsRemaining--;
             }
-            // Add visual effect here later (e.g., change color briefly)
           }
         }
 
@@ -224,8 +227,6 @@
             ctx.stroke();
             ctx.closePath();
           }
-          // Optionally draw inactive pegs differently (e.g., greyed out)
-          // else { ... }
         }
       }
 
@@ -293,8 +294,24 @@
         // Draw Everything
         pegs.forEach(peg => peg.draw(ctx));// Draw Pegs
         drawLauncher(ctx, launcherAngle);
+        // Get the canvas's position in the document (this is probably redundant???)
+        const canvasRect = ctx.canvas.getBoundingClientRect();
         if (activeBall) {
-          activeBall.draw(ctx);
+          if (!bitcoinSkin)
+            activeBall.draw(ctx);
+          else {
+            // Translate canvas coordinates to document coordinates
+            const x = activeBall.x + canvasRect.left - 24;
+            const y = activeBall.y + canvasRect.top - 24;
+
+            // Now update the GIF's position
+            btc.style.left = `${x}px`;
+            btc.style.top = `${y}px`;
+          }
+        }
+        else if (bitcoinSkin) {
+          btc.style.left = `${canvasRect.left - 24 + (WIDTH / 2)}px`;
+          btc.style.top = `${canvasRect.top - 24}px`;
         }
         requestAnimationFrame(gameLoop);// Request Next Frame
       }

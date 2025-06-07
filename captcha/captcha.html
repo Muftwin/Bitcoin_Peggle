@@ -19,6 +19,7 @@
       background: white;
       width: 390px;
       height: 300px;
+      overflow: hidden;
     }
 
     /* Your style here... */
@@ -40,50 +41,267 @@
       // Your CAPTCHA code goes here, we've added a simple example below:
       //document.getElementById('solve').addEventListener('click', () => captchaSuccess());
 
+
+
+      //Difficulty Settings
+      let orangePegs = 5
+      let orangeSize = 10
+      let bluePegs = 5
+      let blueSize = 10
+      let mustCatch = true // Captcha will reset if you don't catch the ball
+      let bitcoinSkin = true // Cosmetic bitcoin theme
+
+      const container = document.getElementById('captcha-container');
+      const canvas = document.createElement('canvas');
+      canvas.width = 390;
+      canvas.height = 300;
+      canvas.id = 'captcha-canvas';
+      container.appendChild(canvas);
+      const ctx = canvas.getContext('2d');
+
+      const WIDTH = canvas.width;
+      const HEIGHT = canvas.height;
+      const GRAVITY = 0.25;
+      const BOUNCE_FACTOR = 0.7;
+      const BALL_RADIUS = 10;
+      const PEG_RADIUS = 12;
+      const LAUNCHER_POS = { x: WIDTH / 2, y: 0 };
+      const LAUNCH_SPEED = 10; // Initial speed of the ball
+
+      let pegs = [];
+      let activeBall = null;
+      let orangePegsRemaining = 0;
+      let launcherAngle = Math.PI / 2; // Pointing straight down initially
+      let canShoot = true
+
+      function drawLauncher(ctx, angle) {
+        const len = 50;
+        const endX = LAUNCHER_POS.x + len * Math.cos(angle);
+        const endY = LAUNCHER_POS.y + len * Math.sin(angle);
+
+        ctx.beginPath();
+        ctx.moveTo(LAUNCHER_POS.x, LAUNCHER_POS.y);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 5;
+        ctx.stroke();
+        ctx.closePath();
+
+        // Draw base circle for launcher
+        ctx.beginPath();
+        ctx.arc(LAUNCHER_POS.x, LAUNCHER_POS.y, 15, 0, Math.PI * 2);
+        ctx.fillStyle = 'grey';
+        ctx.fill();
+        ctx.closePath();
+      }
+      class Ball {
+        constructor(x, y, vx, vy) {
+          this.x = x;
+          this.y = y;
+          this.vx = vx;
+          this.vy = vy;
+          this.radius = BALL_RADIUS;
+          this.color = 'red';
+          this.active = true;
+        }
+
+        update(pegs) {
+          if (!this.active) return false;
+
+          // Apply gravity
+          this.vy += GRAVITY;
+
+          // Move ball
+          this.x += this.vx;
+          this.y += this.vy;
+
+          // Wall collisions
+          if (this.x - this.radius < 0 || this.x + this.radius > WIDTH) {
+            this.vx *= -BOUNCE_FACTOR;
+            this.x = Math.max(this.radius, Math.min(WIDTH - this.radius, this.x)); // Clamp position
+          }
+          // No top wall bounce needed usually
+
+          // Peg collisions
+          let hitPeg = false;
+          pegs.forEach(peg => {
+            if (peg.active) {
+              const dx = this.x - peg.x;
+              const dy = this.y - peg.y;
+              const distSq = dx * dx + dy * dy;
+              const radiiSumSq = (this.radius + peg.radius) * (this.radius + peg.radius);
+
+              if (distSq < radiiSumSq) {
+                hitPeg = true; // Mark that a hit occurred this frame
+
+                // --- Basic Bounce Calculation ---
+                const dist = Math.sqrt(distSq);
+                // Normalize collision vector
+                const nx = dx / dist;
+                const ny = dy / dist;
+
+                // Calculate relative velocity
+                // For simplicity, treat peg as stationary
+                const dotProduct = this.vx * nx + this.vy * ny;
+
+                // Reflect velocity (simplified)
+                this.vx -= 2 * dotProduct * nx;
+                this.vy -= 2 * dotProduct * ny;
+
+                // Apply bounce factor
+                this.vx *= BOUNCE_FACTOR;
+                this.vy *= BOUNCE_FACTOR;
+
+                // Move ball slightly out of collision to prevent sticking
+                const overlap = (this.radius + peg.radius) - dist;
+                this.x += nx * overlap * 1.1; // Push out slightly more
+                this.y += ny * overlap * 1.1;
+
+                // Handle peg hit logic AFTER physics resolution
+                peg.hit();
+              }
+            }
+          });
+
+
+          // Check if ball is off screen (bottom)
+          if (this.y - this.radius > HEIGHT) {
+            this.active = false;
+            return false; // Indicate ball is gone
+          }
+
+          return true; // Indicate ball is still active
+        }
+
+        draw(ctx) {
+          if (this.active) {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = this.color;
+            ctx.fill();
+            ctx.closePath();
+          }
+        }
+      }
+
+      class Peg {
+        constructor(x, y, type = "blue") {
+          this.x = x;
+          this.y = y;
+          this.radius = PEG_RADIUS;
+          this.type = type;
+          this.active = true;
+          this.hitThisTurn = false; // Prevent multi-hits from one ball pass
+
+          if (type === "orange") {
+            this.color = 'orange';
+            orangePegsRemaining++;
+          } else {
+            this.color = 'blue';
+          }
+        }
+
+        hit() {
+          // Only register hit if peg is active and not hit this turn yet
+          if (this.active && !this.hitThisTurn) {
+            this.active = false;
+            this.hitThisTurn = true; // Mark as hit for this turn
+            if (this.type === "orange") {
+              orangePegsRemaining--;
+            }
+            // Add visual effect here later (e.g., change color briefly)
+          }
+        }
+
+        draw(ctx) {
+          if (this.active) {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = this.color;
+            ctx.fill();
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.closePath();
+          }
+          // Optionally draw inactive pegs differently (e.g., greyed out)
+          // else { ... }
+        }
+      }
+
+      // --- Functions ---
+      function setupLevel() {
+        pegs = [];
+        orangePegsRemaining = 0;
+
+        // Simple grid layout for demonstration
+        const rows = 3;
+        const cols = 18;
+        const startX = 0;
+        const startY = 100;
+        const spacingX = 40;
+        const spacingY = 35;
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            // Stagger alternate rows
+            const x = startX + c * spacingX + (r % 2) * (spacingX / 2);
+            const y = startY + r * spacingY;
+
+            // Basic check to avoid edges (optional)
+            if (x < PEG_RADIUS || x > WIDTH - PEG_RADIUS) continue;
+
+            let type = "blue";
+            type = "orange";
+
+            // Add peg if not too dense (e.g., only add 70% of potential blue pegs)
+            if (type === "orange" || Math.random() < 0.7) {
+              pegs.push(new Peg(x, y, type));
+            }
+          }
+        }
+
+      }
+      canvas.addEventListener('mousemove', (event) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
+        launcherAngle = Math.atan2(mouseY - LAUNCHER_POS.y, mouseX - LAUNCHER_POS.x);
+      });
+
+      canvas.addEventListener('click', (event) => {
+        const vx = LAUNCH_SPEED * Math.cos(launcherAngle);
+        const vy = LAUNCH_SPEED * Math.sin(launcherAngle);
+        activeBall = new Ball(LAUNCHER_POS.x, LAUNCHER_POS.y, vx, vy);
+        canShoot = false
+      });
+
+      function gameLoop() {
+        // Clear Canvas
+        ctx.clearRect(0, 0, WIDTH, HEIGHT);
+        // Update State
+        if (activeBall) {
+          const ballStillActive = activeBall.update(pegs);
+          if (!ballStillActive) {
+            activeBall = null; // Ball is gone
+          }
+        }
+        // Check win
+        if (orangePegsRemaining <= 0) {
+          captchaSuccess();
+        }
+        // Draw Everything
+        pegs.forEach(peg => peg.draw(ctx));// Draw Pegs
+        drawLauncher(ctx, launcherAngle);
+        if (activeBall) {
+          activeBall.draw(ctx);
+        }
+        requestAnimationFrame(gameLoop);// Request Next Frame
+      }
+      // --- Start Game ---
+      setupLevel(); // Initialize the first level
+      requestAnimationFrame(gameLoop); // Start the loop!
     })(window, document);
-
-    const container = document.getElementById('captcha-container');
-    const canvas = document.createElement('canvas');
-    canvas.width = 390;
-    canvas.height = 300;
-    canvas.id = 'captcha-canvas';
-    container.appendChild(canvas);
-    const ctx = canvas.getContext('2d');
-
-    const WIDTH = canvas.width;
-    const HEIGHT = canvas.height;
-    const GRAVITY = 0.25; // Adjusted for JS frame rate
-    const BOUNCE_FACTOR = 0.7;
-    const BALL_RADIUS = 10;
-    const PEG_RADIUS = 12;
-    const LAUNCHER_POS = { x: WIDTH / 2, y: 50 };
-    const LAUNCH_SPEED = 10; // Initial speed of the ball
-
-    let launcherAngle = Math.PI / 2; // Pointing straight down initially
-
-
-    function drawLauncher(ctx, angle) {
-      const len = 50;
-      const endX = LAUNCHER_POS.x + len * Math.cos(angle);
-      const endY = LAUNCHER_POS.y + len * Math.sin(angle);
-
-      ctx.beginPath();
-      ctx.moveTo(LAUNCHER_POS.x, LAUNCHER_POS.y);
-      ctx.lineTo(endX, endY);
-      ctx.strokeStyle = 'white';
-      ctx.lineWidth = 5;
-      ctx.stroke();
-      ctx.closePath();
-
-      // Draw base circle for launcher
-      ctx.beginPath();
-      ctx.arc(LAUNCHER_POS.x, LAUNCHER_POS.y, 15, 0, Math.PI * 2);
-      ctx.fillStyle = 'grey';
-      ctx.fill();
-      ctx.closePath();
-    }
-
-    drawLauncher(ctx, launcherAngle);
   </script>
 </body>
 

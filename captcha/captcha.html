@@ -28,6 +28,13 @@
       position: relative;
       cursor: pointer;
       border: 1px solid #ccc;
+      /* Prevent text selection on drag */
+      -webkit-user-select: none;
+      /* Safari */
+      -ms-user-select: none;
+      /* IE 10 and IE 11 */
+      user-select: none;
+      /* Standard syntax */
     }
 
     #instructions {
@@ -57,6 +64,10 @@
       margin: 0 0 10px 0;
     }
 
+    #instructions p {
+      margin: 5px 0;
+    }
+
     #instructions p.bucket-instruction.hidden {
       display: none;
     }
@@ -75,7 +86,7 @@
     }
 
     .bucket {
-      width: 150px;
+      width: 100px;
       height: 40px;
     }
   </style>
@@ -88,7 +99,8 @@
       <p>Please complete this challenge to prove you are human.</p>
       <p><strong>Objective:</strong> Use the launcher to hit all of the orange pegs.</p>
       <p class="bucket-instruction">You can get another shot by catching the ball in the bucket.</p>
-      <p><strong>Click anywhere to begin the test.</strong></p>
+      <p><i>(Drag to aim, Tap to fire)</i></p>
+      <p><strong>Click/Tap anywhere to begin the test.</strong></p>
     </div>
   </div>
 
@@ -152,11 +164,12 @@
         canShoot: true,
         gameStarted: false,
         mouseX: WIDTH / 2,
+        isDragging: false,
         bucket: {
           x: (WIDTH / 2) - 50,
           y: HEIGHT - 30,
           width: 100,
-          height: 40
+          height: 40,
         },
       };
 
@@ -179,7 +192,7 @@
             this.vx *= -CONFIG.BOUNCE_FACTOR;
             this.x = Math.max(this.radius, Math.min(WIDTH - this.radius, this.x));
           }
-          gameState.pegs.forEach(peg => {
+          gameState.pegs.forEach((peg) => {
             if (peg.active) {
               const dist = Math.hypot(this.x - peg.x, this.y - peg.y);
               if (dist < this.radius + peg.radius) {
@@ -190,7 +203,7 @@
                 this.vy -= 2 * dotProduct * ny;
                 this.vx *= CONFIG.BOUNCE_FACTOR;
                 this.vy *= CONFIG.BOUNCE_FACTOR;
-                const overlap = (this.radius + peg.radius) - dist;
+                const overlap = this.radius + peg.radius - dist;
                 this.x += nx * overlap;
                 this.y += ny * overlap;
                 peg.hit();
@@ -198,13 +211,15 @@
             }
           });
           if (this.y - this.radius > HEIGHT) {
-            this.active = false;
             if (CONFIG.MUST_CATCH) {
+              // If you must catch but missed, reset the whole level.
               resetLevel();
             } else {
+              // If you don't need to catch, just give another shot.
+              // This resets the ball to the launcher without resetting the pegs.
+              gameState.activeBall = null;
               gameState.canShoot = true;
             }
-            return false;
           }
           return true;
         }
@@ -230,7 +245,7 @@
         hit() {
           if (this.active) {
             this.active = false;
-            if (this.color === "orange") {
+            if (this.color === 'orange') {
               gameState.orangePegsRemaining--;
             }
           }
@@ -256,6 +271,7 @@
       }
 
       function resetLevel() {
+        gameState.activeBall = null;
         gameState.pegs = [];
         gameState.orangePegsRemaining = CONFIG.ORANGE_PEGS;
         setupLevel();
@@ -271,7 +287,7 @@
               const x = Math.random() * (WIDTH - size) + size / 2;
               const y = Math.random() * (HEIGHT - 120 - size) + 60;
               const newPeg = { x, y, radius: size / 2 };
-              if (!gameState.pegs.some(p => Math.hypot(p.x - newPeg.x, p.y - newPeg.y) < p.radius + newPeg.radius + 10)) {
+              if (!gameState.pegs.some((p) => Math.hypot(p.x - newPeg.x, p.y - newPeg.y) < p.radius + newPeg.radius + 10)) {
                 gameState.pegs.push(new Peg(x, y, color, size));
                 validPosition = true;
               }
@@ -310,17 +326,18 @@
         ctx.strokeRect(bucket.x, bucket.y, bucket.width, bucket.height);
       }
 
-      function handleMouseMove(e) {
+      function updateAimFromCoords(clientX, clientY) {
         const rect = container.getBoundingClientRect();
-        gameState.mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
+        gameState.mouseX = clientX - rect.left;
+        const mouseY = clientY - rect.top;
         gameState.launcherAngle = Math.atan2(mouseY - CONFIG.LAUNCHER_POS.y, gameState.mouseX - CONFIG.LAUNCHER_POS.x);
       }
 
-      function handleInteractionEnd() {
+      function fireShot() {
         if (!gameState.gameStarted) {
           gameState.gameStarted = true;
           instructionsPanel.classList.add('hidden');
+          // Allow aim update even on first click, but don't fire
           return;
         }
         if (!gameState.canShoot) return;
@@ -330,27 +347,51 @@
         gameState.canShoot = false;
       }
 
-      container.addEventListener('mousemove', handleMouseMove);
-      container.addEventListener('click', handleInteractionEnd);
+      // Desktop
+      container.addEventListener('mousemove', (e) => {
+        gameState.isDragging = true; // Assume mouse move is a drag
+        updateAimFromCoords(e.clientX, e.clientY);
+      });
+      container.addEventListener('mousedown', () => {
+        gameState.isDragging = false; // Reset on mouse down to detect click vs drag-release
+      });
+      // Use mouseup for desktop to match touchend behaviour
+      container.addEventListener('mouseup', (e) => {
+        // If mouseup happens without much move, treat as click
+        if (!gameState.isDragging) {
+          updateAimFromCoords(e.clientX, e.clientY);
+          fireShot();
+        }
+        gameState.isDragging = false; // Reset
+      });
+
+      // Mobile
+      container.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        gameState.isDragging = false;
+        if (e.touches[0]) updateAimFromCoords(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: false });
 
       container.addEventListener('touchmove', (e) => {
         e.preventDefault();
-        if (e.touches && e.touches.length > 0) {
-          const touchEvent = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
-          handleMouseMove(touchEvent);
-        }
+        gameState.isDragging = true;
+        if (e.touches[0]) updateAimFromCoords(e.touches[0].clientX, e.touches[0].clientY);
       }, { passive: false });
 
       container.addEventListener('touchend', (e) => {
         e.preventDefault();
-        handleInteractionEnd();
+        if (!gameState.isDragging) {
+          if (e.changedTouches[0]) updateAimFromCoords(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+          fireShot();
+        }
+        gameState.isDragging = false;
       });
 
       let lastTime = 0;
       function gameLoop(currentTime) {
         if (!gameState.gameStarted) {
           ctx.clearRect(0, 0, WIDTH, HEIGHT);
-          gameState.pegs.forEach(peg => peg.draw(ctx));
+          gameState.pegs.forEach((peg) => peg.draw(ctx));
           drawLauncher(ctx, gameState.launcherAngle);
           if (CONFIG.MUST_CATCH) {
             if (CONFIG.BITCOIN_SKIN && bucketImg) {
@@ -380,11 +421,15 @@
           }
         }
         if (gameState.orangePegsRemaining <= 0) {
-          captchaSuccess();
+          // Prevent continuous calls if success takes time
+          if (gameState.gameStarted) {
+            captchaSuccess();
+            gameState.gameStarted = false; // Stop the loop essentially
+          }
         }
 
         ctx.clearRect(0, 0, WIDTH, HEIGHT);
-        gameState.pegs.forEach(peg => peg.draw(ctx));
+        gameState.pegs.forEach((peg) => peg.draw(ctx));
         if (gameState.canShoot) {
           drawLauncher(ctx, gameState.launcherAngle);
         }
@@ -400,14 +445,15 @@
 
         if (CONFIG.BITCOIN_SKIN && btcImg) {
           btcImg.style.visibility = 'hidden';
+          let targetX, targetY;
           if (gameState.activeBall) {
-            const targetX = gameState.activeBall.x - btcImg.width / 2;
-            const targetY = gameState.activeBall.y - btcImg.height / 2;
+            targetX = gameState.activeBall.x - btcImg.width / 2;
+            targetY = gameState.activeBall.y - btcImg.height / 2;
             btcImg.style.visibility = 'visible';
             btcImg.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
           } else if (gameState.canShoot) {
-            const targetX = CONFIG.LAUNCHER_POS.x - btcImg.width / 2;
-            const targetY = CONFIG.LAUNCHER_POS.y - btcImg.height / 2;
+            targetX = CONFIG.LAUNCHER_POS.x - btcImg.width / 2;
+            targetY = CONFIG.LAUNCHER_POS.y - btcImg.height / 2;
             btcImg.style.visibility = 'visible';
             btcImg.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
           }
@@ -416,12 +462,15 @@
             gameState.activeBall.draw(ctx);
           }
         }
-
-        requestAnimationFrame(gameLoop);
+        // Only request frame if game is still active
+        if (gameState.gameStarted) {
+          requestAnimationFrame(gameLoop);
+        }
       }
 
       setupLevel();
       requestAnimationFrame(gameLoop);
+
     })(window, document);
   </script>
 </body>

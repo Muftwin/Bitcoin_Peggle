@@ -5,7 +5,6 @@
   <meta charset="utf-8">
   <title>Joel</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
   <style type="text/css">
     html,
     body {
@@ -13,6 +12,12 @@
       margin: 0;
       padding: 0;
       font-family: sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
     }
 
     #captcha-container {
@@ -20,174 +25,194 @@
       width: 390px;
       height: 300px;
       overflow: hidden;
+      position: relative;
+      cursor: pointer;
+      border: 1px solid #ccc;
     }
 
-    /* Your style here... */
+    #instructions {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(255, 255, 255, 0.9);
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+      box-sizing: border-box;
+      transition: opacity 0.5s ease-out;
+    }
+
+    #instructions.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #instructions h3 {
+      margin: 0 0 10px 0;
+    }
+
+    #instructions p.bucket-instruction.hidden {
+      display: none;
+    }
+
+    .game-object {
+      position: absolute;
+      top: 0;
+      left: 0;
+      will-change: transform;
+      visibility: hidden;
+    }
+
+    .btc-skin {
+      width: 40px;
+      height: 40px;
+    }
+
+    .bucket {
+      width: 150px;
+      height: 40px;
+    }
   </style>
 </head>
 
 <body>
   <div id="captcha-container">
-
+    <div id="instructions">
+      <h3>Just one more step...</h3>
+      <p>Please complete this challenge to prove you are human.</p>
+      <p><strong>Objective:</strong> Use the launcher to hit all of the orange pegs.</p>
+      <p class="bucket-instruction">You can get another shot by catching the ball in the bucket.</p>
+      <p><strong>Click anywhere to begin the test.</strong></p>
+    </div>
   </div>
 
   <script type="text/javascript">
-
     (function (window, document) {
-      // This is how you tell the parent window that the CAPTCHA was successful.
       function captchaSuccess() {
         window.top.postMessage("success", '*');
       }
 
-      // Your CAPTCHA code goes here, we've added a simple example below:
-      //document.getElementById('solve').addEventListener('click', () => captchaSuccess());
-
-      //Difficulty Settings
-      let orangePegs = 5
-      let orangeSize = 20
-      let bluePegs = 5
-      let blueSize = 10
-      let mustCatch = true // Captcha will reset if you don't catch the ball
-      let bitcoinSkin = true // Cosmetic bitcoin theme
+      const CONFIG = {
+        ORANGE_PEGS: 3,
+        ORANGE_SIZE: 40,
+        BLUE_PEGS: 10,
+        BLUE_SIZE: 20,
+        MUST_CATCH: true, //adds a ball bucket that you must catch the ball with or it will restart
+        BITCOIN_SKIN: true, //adds bitcoin themed objects
+        GRAVITY: 900,
+        BOUNCE_FACTOR: 0.5,
+        BALL_RADIUS: 10,
+        LAUNCH_SPEED: 750,
+        LAUNCHER_POS: { x: 390 / 2, y: 0 },
+      };
 
       const container = document.getElementById('captcha-container');
+      const instructionsPanel = document.getElementById('instructions');
       const canvas = document.createElement('canvas');
       canvas.width = 390;
       canvas.height = 300;
-      canvas.id = 'captcha-canvas';
       container.appendChild(canvas);
       const ctx = canvas.getContext('2d');
-
       const WIDTH = canvas.width;
       const HEIGHT = canvas.height;
-      const GRAVITY = 0.1;
-      const BOUNCE_FACTOR = 0.7;
-      const BALL_RADIUS = 10;
-      const PEG_RADIUS = 12;
-      const LAUNCHER_POS = { x: WIDTH / 2, y: 0 };
-      const LAUNCH_SPEED = 10; // Initial speed of the ball
 
-      let pegs = [];
-      let activeBall = null;
-      let orangePegsRemaining = orangePegs;
-      let launcherAngle = Math.PI / 2; // Pointing straight down initially
-      let canShoot = true
+      let btcImg = null;
+      let bucketImg = null;
 
-      const btc = document.createElement('img');
-      btc.src = 'btc.gif';
-      btc.style.width = '40px';
-      btc.style.height = '40px';
-      btc.style.position = 'fixed';
-      document.body.appendChild(btc);
+      if (CONFIG.BITCOIN_SKIN) {
+        btcImg = document.createElement('img');
+        btcImg.src = 'btc.gif';
+        btcImg.className = 'game-object btc-skin';
+        container.appendChild(btcImg);
 
-      const bucket = document.createElement('img');
-      bucket.src = 'bucket.png';
-      bucket.style.width = '200px';
-      bucket.style.height = '40px';
-      bucket.style.position = 'fixed';
-      document.body.appendChild(bucket);
-
-      function drawLauncher(ctx, angle) {
-        const len = 50;
-        const endX = LAUNCHER_POS.x + len * Math.cos(angle);
-        const endY = LAUNCHER_POS.y + len * Math.sin(angle);
-
-        ctx.beginPath();
-        ctx.moveTo(LAUNCHER_POS.x, LAUNCHER_POS.y);
-        ctx.lineTo(endX, endY);
-        ctx.strokeStyle = 'grey';
-        ctx.lineWidth = 5;
-        ctx.stroke();
-        ctx.closePath();
-
-        // Draw base circle for launcher
-        ctx.beginPath();
-        ctx.arc(LAUNCHER_POS.x, LAUNCHER_POS.y, 15, 0, Math.PI * 2);
-        ctx.fillStyle = 'grey';
-        ctx.fill();
-        ctx.closePath();
+        if (CONFIG.MUST_CATCH) {
+          bucketImg = document.createElement('img');
+          bucketImg.src = 'bucket.png';
+          bucketImg.className = 'game-object bucket';
+          bucketImg.style.visibility = 'visible';
+          container.appendChild(bucketImg);
+        }
       }
+
+      if (!CONFIG.MUST_CATCH) {
+        document.querySelector('.bucket-instruction').classList.add('hidden');
+      }
+
+      const gameState = {
+        pegs: [],
+        activeBall: null,
+        orangePegsRemaining: CONFIG.ORANGE_PEGS,
+        launcherAngle: Math.PI / 2,
+        canShoot: true,
+        gameStarted: false,
+        mouseX: WIDTH / 2,
+        bucket: {
+          x: (WIDTH / 2) - 50,
+          y: HEIGHT - 30,
+          width: 100,
+          height: 40
+        },
+      };
+
       class Ball {
         constructor(x, y, vx, vy) {
           this.x = x;
           this.y = y;
           this.vx = vx;
           this.vy = vy;
-          this.radius = BALL_RADIUS;
-          this.color = 'red';
+          this.radius = CONFIG.BALL_RADIUS;
           this.active = true;
         }
-
-        update(pegs) {
+        update(dt) {
           if (!this.active) return false;
+          this.vy += CONFIG.GRAVITY * dt;
+          this.x += this.vx * dt;
+          this.y += this.vy * dt;
 
-          // Apply gravity
-          this.vy += GRAVITY;
-
-          // Move ball
-          this.x += this.vx;
-          this.y += this.vy;
-
-          // Wall collisions
           if (this.x - this.radius < 0 || this.x + this.radius > WIDTH) {
-            this.vx *= -BOUNCE_FACTOR;
-            this.x = Math.max(this.radius, Math.min(WIDTH - this.radius, this.x)); // Clamp position
+            this.vx *= -CONFIG.BOUNCE_FACTOR;
+            this.x = Math.max(this.radius, Math.min(WIDTH - this.radius, this.x));
           }
-          // No top wall bounce needed usually
-
-          // Peg collisions
-          let hitPeg = false;
-          pegs.forEach(peg => {
+          gameState.pegs.forEach(peg => {
             if (peg.active) {
-              const dx = this.x - peg.x;
-              const dy = this.y - peg.y;
-              const distSq = dx * dx + dy * dy;
-              const radiiSumSq = (this.radius + peg.radius) * (this.radius + peg.radius);
-
-              if (distSq < radiiSumSq) {
-                hitPeg = true; // Mark that a hit occurred this frame
-
-                // --- Basic Bounce Calculation ---
-                const dist = Math.sqrt(distSq);
-                // Normalize collision vector
-                const nx = dx / dist;
-                const ny = dy / dist;
-
-                // Calculate relative velocity
-                // For simplicity, treat peg as stationary
+              const dist = Math.hypot(this.x - peg.x, this.y - peg.y);
+              if (dist < this.radius + peg.radius) {
+                const nx = (this.x - peg.x) / dist;
+                const ny = (this.y - peg.y) / dist;
                 const dotProduct = this.vx * nx + this.vy * ny;
-
-                // Reflect velocity (simplified)
                 this.vx -= 2 * dotProduct * nx;
                 this.vy -= 2 * dotProduct * ny;
-
-                // Apply bounce factor
-                this.vx *= BOUNCE_FACTOR;
-                this.vy *= BOUNCE_FACTOR;
-
-                // Move ball slightly out of collision to prevent sticking
+                this.vx *= CONFIG.BOUNCE_FACTOR;
+                this.vy *= CONFIG.BOUNCE_FACTOR;
                 const overlap = (this.radius + peg.radius) - dist;
-                this.x += nx * overlap * 1.1; // Push out slightly more
-                this.y += ny * overlap * 1.1;
-
-                // Handle peg hit logic AFTER physics resolution
+                this.x += nx * overlap;
+                this.y += ny * overlap;
                 peg.hit();
               }
             }
           });
-          // Check if ball is off screen (bottom)
           if (this.y - this.radius > HEIGHT) {
             this.active = false;
-            return false; // Indicate ball is gone
+            if (CONFIG.MUST_CATCH) {
+              resetLevel();
+            } else {
+              gameState.canShoot = true;
+            }
+            return false;
           }
-          return true; // Indicate ball is still active
+          return true;
         }
-
         draw(ctx) {
           if (this.active) {
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-            ctx.fillStyle = this.color;
+            ctx.fillStyle = 'red';
             ctx.fill();
             ctx.closePath();
           }
@@ -195,25 +220,21 @@
       }
 
       class Peg {
-        constructor(x, y, color, size) { // Add size parameter
+        constructor(x, y, color, size) {
           this.x = x;
           this.y = y;
-          this.radius = size / 2; // Use size for radius
-          this.size = size; // Store size for collision checking
+          this.radius = size / 2;
           this.active = true;
           this.color = color;
         }
-
         hit() {
-          // Only register hit if peg is active and not hit this turn yet
           if (this.active) {
             this.active = false;
             if (this.color === "orange") {
-              orangePegsRemaining--;
+              gameState.orangePegsRemaining--;
             }
           }
         }
-
         draw(ctx) {
           if (this.active) {
             ctx.beginPath();
@@ -228,114 +249,179 @@
         }
       }
 
-      // --- Functions ---
+      function checkBallBucketCollision(ball, bucket) {
+        const closestX = Math.max(bucket.x, Math.min(ball.x, bucket.x + bucket.width));
+        const closestY = Math.max(bucket.y, Math.min(ball.y, bucket.y + bucket.height));
+        return Math.hypot(ball.x - closestX, ball.y - closestY) < ball.radius;
+      }
+
+      function resetLevel() {
+        gameState.pegs = [];
+        gameState.orangePegsRemaining = CONFIG.ORANGE_PEGS;
+        setupLevel();
+        gameState.canShoot = true;
+      }
+
       function setupLevel() {
-
-        // Helper function to check collisions
-        const checkCollision = (newPeg) => {
-          return pegs.some(existingPeg => {
-            const dx = newPeg.x - existingPeg.x;
-            const dy = newPeg.y - existingPeg.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            return distance < (newPeg.radius / 2 + existingPeg.radius / 2);
-          });
-        };
-
-        // Create pegs with collision checking
         const createPegs = (count, size, color) => {
           for (let i = 0; i < count; i++) {
-            let attempts = 0;
-            let validPosition = false;
-            let margin = 30
-            while (!validPosition && attempts < 5000) {
-              const minPos = margin + size / 2;
-              const maxPos = WIDTH - margin - size / 2;
-
-              const x = Math.random() * (maxPos - minPos) + minPos;
-              const y = Math.random() * (HEIGHT - margin * 2 - size) + margin + size / 2;
-
-              const newPeg = new Peg(x, y, color, size);
-
-              if (!checkCollision(newPeg)) {
-                pegs.push(newPeg);
+            let validPosition = false,
+              attempts = 0;
+            while (!validPosition && attempts++ < 100) {
+              const x = Math.random() * (WIDTH - size) + size / 2;
+              const y = Math.random() * (HEIGHT - 120 - size) + 60;
+              const newPeg = { x, y, radius: size / 2 };
+              if (!gameState.pegs.some(p => Math.hypot(p.x - newPeg.x, p.y - newPeg.y) < p.radius + newPeg.radius + 10)) {
+                gameState.pegs.push(new Peg(x, y, color, size));
                 validPosition = true;
               }
-              attempts++;
-            }
-
-            if (!validPosition) {
-              console.warn(`Could not place ${color} peg after 5000 attempts`);
             }
           }
         };
-
-        // Create pegs
-        createPegs(orangePegs, orangeSize, 'orange');
-        createPegs(bluePegs, blueSize, 'blue');
-
-        return pegs;
+        createPegs(CONFIG.ORANGE_PEGS, CONFIG.ORANGE_SIZE, 'orange');
+        createPegs(CONFIG.BLUE_PEGS, CONFIG.BLUE_SIZE, 'blue');
       }
 
-      let mouseX = 0
-      canvas.addEventListener('mousemove', (event) => {
-        const rect = canvas.getBoundingClientRect();
-        mouseX = event.clientX - rect.left;
-        const mouseY = event.clientY - rect.top;
-        launcherAngle = Math.atan2(mouseY - LAUNCHER_POS.y, mouseX - LAUNCHER_POS.x);
+      function drawLauncher(ctx, angle) {
+        const len = 50;
+        const endX = CONFIG.LAUNCHER_POS.x + len * Math.cos(angle);
+        const endY = CONFIG.LAUNCHER_POS.y + len * Math.sin(angle);
+        ctx.beginPath();
+        ctx.moveTo(CONFIG.LAUNCHER_POS.x, CONFIG.LAUNCHER_POS.y);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = 'grey';
+        ctx.lineWidth = 5;
+        ctx.stroke();
+        ctx.closePath();
+        ctx.beginPath();
+        ctx.arc(CONFIG.LAUNCHER_POS.x, CONFIG.LAUNCHER_POS.y, 15, 0, Math.PI * 2);
+        ctx.fillStyle = 'grey';
+        ctx.fill();
+        ctx.closePath();
+      }
+
+      function drawBucket(ctx) {
+        if (!CONFIG.MUST_CATCH) return;
+        const bucket = gameState.bucket;
+        ctx.fillStyle = '#666';
+        ctx.fillRect(bucket.x, bucket.y, bucket.width, bucket.height);
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bucket.x, bucket.y, bucket.width, bucket.height);
+      }
+
+      function handleMouseMove(e) {
+        const rect = container.getBoundingClientRect();
+        gameState.mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        gameState.launcherAngle = Math.atan2(mouseY - CONFIG.LAUNCHER_POS.y, gameState.mouseX - CONFIG.LAUNCHER_POS.x);
+      }
+
+      function handleInteractionEnd() {
+        if (!gameState.gameStarted) {
+          gameState.gameStarted = true;
+          instructionsPanel.classList.add('hidden');
+          return;
+        }
+        if (!gameState.canShoot) return;
+        const vx = CONFIG.LAUNCH_SPEED * Math.cos(gameState.launcherAngle);
+        const vy = CONFIG.LAUNCH_SPEED * Math.sin(gameState.launcherAngle);
+        gameState.activeBall = new Ball(CONFIG.LAUNCHER_POS.x, CONFIG.LAUNCHER_POS.y, vx, vy);
+        gameState.canShoot = false;
+      }
+
+      container.addEventListener('mousemove', handleMouseMove);
+      container.addEventListener('click', handleInteractionEnd);
+
+      container.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches && e.touches.length > 0) {
+          const touchEvent = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+          handleMouseMove(touchEvent);
+        }
+      }, { passive: false });
+
+      container.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        handleInteractionEnd();
       });
 
-      canvas.addEventListener('click', (event) => {
-        const vx = LAUNCH_SPEED * Math.cos(launcherAngle);
-        const vy = LAUNCH_SPEED * Math.sin(launcherAngle);
-        activeBall = new Ball(LAUNCHER_POS.x, LAUNCHER_POS.y, vx, vy);
-        canShoot = false
-      });
+      let lastTime = 0;
+      function gameLoop(currentTime) {
+        if (!gameState.gameStarted) {
+          ctx.clearRect(0, 0, WIDTH, HEIGHT);
+          gameState.pegs.forEach(peg => peg.draw(ctx));
+          drawLauncher(ctx, gameState.launcherAngle);
+          if (CONFIG.MUST_CATCH) {
+            if (CONFIG.BITCOIN_SKIN && bucketImg) {
+              bucketImg.style.transform = `translate3d(${gameState.bucket.x}px, ${gameState.bucket.y}px, 0)`;
+            } else {
+              drawBucket(ctx);
+            }
+          }
+          if (CONFIG.BITCOIN_SKIN && btcImg) {
+            const targetX = CONFIG.LAUNCHER_POS.x - btcImg.width / 2;
+            const targetY = CONFIG.LAUNCHER_POS.y - btcImg.height / 2;
+            btcImg.style.visibility = 'visible';
+            btcImg.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
+          }
+          requestAnimationFrame(gameLoop);
+          return;
+        }
 
-      function gameLoop() {
-        // Clear Canvas
-        ctx.clearRect(0, 0, WIDTH, HEIGHT);
-        // Update State
-        if (activeBall) {
-          const ballStillActive = activeBall.update(pegs);
-          if (!ballStillActive) {
-            activeBall = null; // Ball is gone
+        const deltaTime = (currentTime - lastTime) / 1000 || 0;
+        lastTime = currentTime;
+
+        if (gameState.activeBall) {
+          gameState.activeBall.update(deltaTime);
+          if (CONFIG.MUST_CATCH && gameState.activeBall && checkBallBucketCollision(gameState.activeBall, gameState.bucket)) {
+            gameState.activeBall = null;
+            gameState.canShoot = true;
           }
         }
-        // Check win
-        if (orangePegsRemaining <= 0) {
+        if (gameState.orangePegsRemaining <= 0) {
           captchaSuccess();
         }
-        // Draw Everything
-        pegs.forEach(peg => peg.draw(ctx));// Draw Pegs
-        drawLauncher(ctx, launcherAngle);
-        // Get the canvas's position in the document (this is probably redundant???)
-        const canvasRect = ctx.canvas.getBoundingClientRect();
-        if (activeBall) {
-          if (!bitcoinSkin)
-            activeBall.draw(ctx);
-          else {
-            // Translate canvas coordinates to document coordinates
-            const x = activeBall.x + canvasRect.left - 24;
-            const y = activeBall.y + canvasRect.top - 24;
 
-            // Now update the GIF's position
-            btc.style.left = `${x}px`;
-            btc.style.top = `${y}px`;
+        ctx.clearRect(0, 0, WIDTH, HEIGHT);
+        gameState.pegs.forEach(peg => peg.draw(ctx));
+        if (gameState.canShoot) {
+          drawLauncher(ctx, gameState.launcherAngle);
+        }
+
+        if (CONFIG.MUST_CATCH) {
+          gameState.bucket.x = Math.max(0, Math.min(gameState.mouseX - gameState.bucket.width / 2, WIDTH - gameState.bucket.width));
+          if (CONFIG.BITCOIN_SKIN && bucketImg) {
+            bucketImg.style.transform = `translate3d(${gameState.bucket.x}px, ${gameState.bucket.y}px, 0)`;
+          } else {
+            drawBucket(ctx);
           }
         }
-        else if (bitcoinSkin) {
-          btc.style.left = `${canvasRect.left - 24 + (WIDTH / 2)}px`;
-          btc.style.top = `${canvasRect.top - 24}px`;
+
+        if (CONFIG.BITCOIN_SKIN && btcImg) {
+          btcImg.style.visibility = 'hidden';
+          if (gameState.activeBall) {
+            const targetX = gameState.activeBall.x - btcImg.width / 2;
+            const targetY = gameState.activeBall.y - btcImg.height / 2;
+            btcImg.style.visibility = 'visible';
+            btcImg.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
+          } else if (gameState.canShoot) {
+            const targetX = CONFIG.LAUNCHER_POS.x - btcImg.width / 2;
+            const targetY = CONFIG.LAUNCHER_POS.y - btcImg.height / 2;
+            btcImg.style.visibility = 'visible';
+            btcImg.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
+          }
+        } else {
+          if (gameState.activeBall) {
+            gameState.activeBall.draw(ctx);
+          }
         }
-        bucket.style.left = `${mouseX - 100}px`;
-        bucket.style.top = `${canvasRect.top + 275}px`;
 
-
-        requestAnimationFrame(gameLoop);// Request Next Frame
+        requestAnimationFrame(gameLoop);
       }
-      // --- Start Game ---
-      setupLevel(); // Initialize the first level
-      requestAnimationFrame(gameLoop); // Start the loop!
+
+      setupLevel();
+      requestAnimationFrame(gameLoop);
     })(window, document);
   </script>
 </body>
